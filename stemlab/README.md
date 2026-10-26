@@ -58,38 +58,84 @@ stemlab/
     └── components/             UploadZone, ProcessingView, Mixer, TrackStrip, Transport, Waveform, ExportPanel
 ```
 
-## วิธีรัน
+## เตรียมตัวก่อนรัน
 
-ต้องมี Redis, Python 3.10+, Node 20+ และ **ffmpeg** (Demucs ใช้ถอดรหัส MP3/FLAC)
+1. ดาวน์โหลดโปรเจกต์ให้ครบทั้ง repository แล้วเปิดโฟลเดอร์ `stemlab` ใน VS Code หรือ Terminal
+2. เลือกวิธีรันก่อน:
+   - **Docker (แนะนำ):** ติดตั้ง Docker Desktop และเปิดใช้งาน Docker Engine ให้เรียบร้อย วิธีนี้จะรัน Redis, API และ worker ให้ ไม่ต้องติดตั้ง Python หรือ ffmpeg บนเครื่อง
+   - **รันแยกบริการ:** ติดตั้ง Python 3.10+, Node.js 20+ (รวม npm), Docker สำหรับ Redis และ ffmpeg โดยเพิ่ม `ffmpeg` ไว้ใน `PATH`
+3. ตรวจสอบเครื่องมือจาก Terminal:
 
-### ทางที่ 1: Docker (ง่ายสุด)
-
-```bash
-docker compose up --build        # redis + api (:8000) + worker
-cd frontend && npm install && npm run dev    # เปิด http://localhost:5173
+```powershell
+docker --version
+docker compose version
+node --version
+npm --version
 ```
 
-ครั้งแรก worker จะดาวน์โหลดน้ำหนักโมเดล Demucs อัตโนมัติ (เก็บไว้ใน volume `model-cache`)
+สำหรับการรันแยกบริการ ให้ตรวจเพิ่มด้วย `python --version` และ `ffmpeg -version` หากคำสั่งใดไม่รู้จัก ให้ติดตั้งเครื่องมือนั้นและเปิด Terminal ใหม่ก่อนดำเนินการต่อ
 
-### ทางที่ 2: รันเอง
+> ไม่จำเป็นต้องติดตั้ง Git เพื่อรันโปรเจกต์ หากมีไฟล์โปรเจกต์อยู่ในเครื่องแล้ว หากใช้ Docker ให้เปิด Docker Desktop ค้างไว้ก่อนสั่งรัน
 
-```bash
-# Terminal 1: Redis
+## วิธีรัน
+
+### ทางที่ 1: Docker (แนะนำ)
+
+เปิด Terminal ที่โฟลเดอร์โปรเจกต์ แล้วรันบริการ Backend:
+
+```powershell
+docker compose up --build
+```
+
+เปิด Terminal อีกหน้าต่างเพื่อรัน Frontend:
+
+```powershell
+cd frontend
+npm ci
+npm run dev
+```
+
+เปิดเว็บที่ `http://localhost:5173`; API อยู่ที่ `http://localhost:8000` และเอกสาร API อยู่ที่ `http://localhost:8000/docs` ครั้งแรก worker จะดาวน์โหลดน้ำหนักโมเดล Demucs โดยอัตโนมัติและเก็บไว้ใน Docker volume `model-cache` จึงอาจใช้เวลานานและต้องเชื่อมต่ออินเทอร์เน็ต
+
+หยุดบริการ Docker ด้วย `Ctrl+C` ใน Terminal ที่รัน `docker compose up` หรือใช้ `docker compose down` จากโฟลเดอร์โปรเจกต์
+
+### ทางที่ 2: รันแยกบริการ
+
+เปิด Terminal แยกสำหรับแต่ละบริการ โดยคำสั่งด้านล่างเป็นตัวอย่างสำหรับ Windows PowerShell
+
+**Terminal 1 — Redis**
+
+```powershell
 docker run --rm -p 6379:6379 redis:7-alpine
+```
 
-# Terminal 2: API
+**Terminal 2 — Backend API**
+
+```powershell
 cd backend
-python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+Copy-Item .env.example .env
 pip install -r requirements.txt -r requirements-ml.txt
-cp .env.example .env
 uvicorn app.main:app --reload
+```
 
-# Terminal 3: Worker (Windows ต้องเพิ่ม --pool=solo)
-cd backend && source .venv/bin/activate
-celery -A app.celery_app.celery worker --loglevel=info --concurrency=1
+การติดตั้ง `requirements-ml.txt` จะติดตั้ง PyTorch และ Demucs ซึ่งมีขนาดใหญ่ หากต้องการเพียงทดลองการทำงานโดยไม่ใช้โมเดลจริง ให้ตั้ง `SEPARATOR=mock` ใน `backend\.env` และติดตั้งเฉพาะ `requirements.txt`
 
-# Terminal 4: Frontend
-cd frontend && npm install && npm run dev
+**Terminal 3 — Worker**
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+celery -A app.celery_app.celery worker --loglevel=info --concurrency=1 --pool=solo
+```
+
+**Terminal 4 — Frontend**
+
+```powershell
+cd frontend
+npm ci
+npm run dev
 ```
 
 ### โหมดทดสอบโดยไม่ใช้ AI
